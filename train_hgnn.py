@@ -29,14 +29,18 @@ class FixedHGNNTrainer:
         )
         self.criterion = nn.BCEWithLogitsLoss()
         
-    def precision_at_k(self, outputs, labels, k):
+    @staticmethod
+    def precision_at_k(outputs, labels, k):
         """
-        Calculate visit-level precision@k (TRANS metric) - COMPLETELY FIXED
+        Calculate visit-level precision@k (TRANS metric) - FIXED
+        Returns: float (single value, not tuple)
         
-        KEY FIX: Logits should be used directly for argsort (higher is better)
-        NO sigmoid needed - we just need relative ranking!
+        Args:
+            outputs: model predictions, shape (batch_size, num_classes)
+            labels: ground truth labels, shape (batch_size, num_classes)
+            k: number of top predictions to consider
         """
-        # Ensure numpy arrays
+        # Convert to numpy if needed
         if hasattr(outputs, 'cpu'):
             outputs = outputs.cpu().numpy()
         if hasattr(labels, 'cpu'):
@@ -45,20 +49,14 @@ class FixedHGNNTrainer:
         outputs = np.array(outputs)
         labels = np.array(labels)
         
-        print(f"\n[PRECISION@{k} DEBUG]")
-        print(f"  Outputs shape: {outputs.shape}")
-        print(f"  Outputs range: [{outputs.min():.4f}, {outputs.max():.4f}]")
-        print(f"  Outputs mean: {outputs.mean():.4f}")
-        print(f"  Outputs std: {outputs.std():.4f}")
-        
-        n_samples = outputs.shape[0]
         precisions = []
+        n_samples = outputs.shape[0]
         
         for i in range(n_samples):
             # Get top-k predicted indices (highest logits)
             top_k_indices = np.argsort(outputs[i])[-k:]
             
-            # Get true labels
+            # Get true label indices
             true_labels = np.where(labels[i] == 1)[0]
             
             if len(true_labels) == 0:
@@ -67,26 +65,26 @@ class FixedHGNNTrainer:
             # Count correct predictions
             correct = len(set(top_k_indices) & set(true_labels))
             
-            # Calculate precision
+            # Precision = correct / min(k, num_true_labels)
             precision = correct / min(k, len(true_labels))
             precisions.append(precision)
-            
-            # Debug first sample
-            if i == 0:
-                print(f"  Sample 0 - Top-{k} indices: {top_k_indices}")
-                print(f"  Sample 0 - True labels: {true_labels}")
-                print(f"  Sample 0 - Correct: {correct}/{min(k, len(true_labels))}")
-                print(f"  Sample 0 - Precision: {precision:.4f}")
         
-        final_precision = np.mean(precisions) if precisions else 0.0
-        print(f"  Final Precision@{k}: {final_precision:.4f}")
-        return final_precision
+        # Return single float value
+        result = np.mean(precisions) if precisions else 0.0
+        return float(result)
     
-    def accuracy_at_k(self, outputs, labels, k):
+    @staticmethod
+    def accuracy_at_k(outputs, labels, k):
         """
-        Calculate code-level accuracy@k (TRANS metric) - COMPLETELY FIXED
+        Calculate code-level accuracy@k (TRANS metric) - FIXED
+        Returns: float (single value, not tuple)
+        
+        Args:
+            outputs: model predictions, shape (batch_size, num_classes)
+            labels: ground truth labels, shape (batch_size, num_classes)
+            k: number of top predictions to consider
         """
-        # Ensure numpy arrays
+        # Convert to numpy if needed
         if hasattr(outputs, 'cpu'):
             outputs = outputs.cpu().numpy()
         if hasattr(labels, 'cpu'):
@@ -97,24 +95,23 @@ class FixedHGNNTrainer:
         
         total_correct = 0
         total_true_labels = 0
-        
         n_samples = outputs.shape[0]
         
         for i in range(n_samples):
             # Get top-k predicted indices
             top_k_indices = np.argsort(outputs[i])[-k:]
             
-            # Get true labels
+            # Get true label indices
             true_labels = np.where(labels[i] == 1)[0]
             
-            # Count correct
+            # Count correct predictions
             correct = len(set(top_k_indices) & set(true_labels))
             total_correct += correct
             total_true_labels += len(true_labels)
         
-        accuracy = total_correct / total_true_labels if total_true_labels > 0 else 0.0
-        print(f"  Accuracy@{k}: {accuracy:.4f} ({total_correct}/{total_true_labels})")
-        return accuracy
+        # Accuracy = total_correct / total_true_labels
+        result = total_correct / total_true_labels if total_true_labels > 0 else 0.0
+        return float(result)
     
     def train_epoch(self, train_loader, epoch):
         """Train for one epoch - FIXED VERSION"""
